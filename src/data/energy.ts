@@ -18,6 +18,7 @@ import type {
 } from "home-assistant-js-websocket";
 import { createStore, getCollection } from "home-assistant-js-websocket";
 import memoizeOne from "memoize-one";
+import { fetchStatisticsWithCache } from "./recorder-statistics-cache";
 import {
   calcDate,
   calcDateDifferenceProperty,
@@ -263,6 +264,7 @@ export const EMPTY_PREFERENCES: EnergyPreferences = {
 };
 
 export interface EnergyInfo {
+  statistics_cache?: boolean;
   cost_sensors: Record<string, string>;
   solar_forecast_domains: string[];
 }
@@ -665,6 +667,9 @@ const getEnergyData = async (
 ): Promise<EnergyData> => {
   const { callWS, entities, states, locale, config } = options;
   const info = await getEnergyInfo(callWS);
+  const fetchPeriodStatistics = info.statistics_cache
+    ? fetchStatisticsWithCache
+    : fetchStatistics;
 
   let co2SignalEntity: string | undefined;
   for (const entity of Object.values(entities)) {
@@ -770,7 +775,7 @@ const getEnergyData = async (
   };
 
   const _energyStats: Statistics | Promise<Statistics> = energyStatIds.length
-    ? fetchStatistics(
+    ? fetchPeriodStatistics(
         callWS,
         periodStart,
         periodEnd,
@@ -782,7 +787,7 @@ const getEnergyData = async (
     : {};
   const _gasEnergyStats: Statistics | Promise<Statistics> =
     gasEnergyStatIds.length
-      ? fetchStatistics(
+      ? fetchPeriodStatistics(
           callWS,
           periodStart,
           periodEnd,
@@ -793,7 +798,7 @@ const getEnergyData = async (
         )
       : {};
   const _powerStats: Statistics | Promise<Statistics> = powerStatIds.length
-    ? fetchStatistics(
+    ? fetchPeriodStatistics(
         callWS,
         finePeriodStart,
         finePeriodEnd,
@@ -808,13 +813,19 @@ const getEnergyData = async (
   // the requested range is beyond the limit of short term statistics.
   const _powerStatsHour: Statistics | Promise<Statistics> =
     powerStatIds.length && finePeriod === "5minute"
-      ? fetchStatistics(callWS, start, end, powerStatIds, "hour", powerUnits, [
-          "mean",
-        ])
+      ? fetchPeriodStatistics(
+          callWS,
+          start,
+          end,
+          powerStatIds,
+          "hour",
+          powerUnits,
+          ["mean"]
+        )
       : {};
 
   const _waterStats: Statistics | Promise<Statistics> = waterStatIds.length
-    ? fetchStatistics(
+    ? fetchPeriodStatistics(
         callWS,
         periodStart,
         periodEnd,
@@ -885,7 +896,7 @@ const getEnergyData = async (
       endCompare
     );
     if (energyStatIds.length) {
-      _energyStatsCompare = fetchStatistics(
+      _energyStatsCompare = fetchPeriodStatistics(
         callWS,
         periodStartCompare,
         periodEndCompare,
@@ -896,7 +907,7 @@ const getEnergyData = async (
       );
     }
     if (gasEnergyStatIds.length) {
-      _gasEnergyStatsCompare = fetchStatistics(
+      _gasEnergyStatsCompare = fetchPeriodStatistics(
         callWS,
         periodStartCompare,
         periodEndCompare,
@@ -907,7 +918,7 @@ const getEnergyData = async (
       );
     }
     if (waterStatIds.length) {
-      _waterStatsCompare = fetchStatistics(
+      _waterStatsCompare = fetchPeriodStatistics(
         callWS,
         periodStartCompare,
         periodEndCompare,
